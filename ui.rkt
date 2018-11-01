@@ -1,10 +1,47 @@
 #lang racket/gui
 
 (require video/base
-         video/player)
+         video/player
+         images/icons/control)
 
-(define view-width 480)
-(define view-height 270)
+(define screen-width 1920)
+(define screen-height 1080)
+
+(define view-width 960)
+(define view-height 540)
+
+(define normal-font
+  (let ([n normal-control-font])
+    (make-object font%
+      (* 4 (send n get-size))
+      (send n get-face)
+      (send n get-family)
+      (send n get-style)
+      (send n get-weight)
+      (send n get-underlined)
+      (send n get-smoothing)
+      (send n get-size-in-pixels)
+      (send n get-hinting))))
+
+(define large-font
+  (let ([n normal-control-font])
+    (make-object font%
+      (* 8 (send n get-size))
+      (send n get-face)
+      (send n get-family)
+      (send n get-style)
+      (send n get-weight)
+      (send n get-underlined)
+      (send n get-smoothing)
+      (send n get-size-in-pixels)
+      (send n get-hinting))))
+
+(define record-label
+  (record-icon #:color "red"
+               #:height 50))
+(define stop-label
+  (stop-icon #:color "gray"
+             #:height 50))
 
 (define vid-gui%
   (class frame%
@@ -39,12 +76,15 @@
                                  [stretchable-width #f]))
     (define time-row (new horizontal-pane% [parent this]))
     (define time (new message% [parent time-row]
-                      [label "0:0:0"]))
+                      [label "0:0:0"]
+                      [font large-font]))
     (define control-row (new horizontal-pane% [parent this]))
     (define mark-button (new button% [parent control-row]
-                             [label "MARK"]))
+                             [label "MARK"]
+                             [font normal-font]))
     (define rec-button (new button% [parent control-row]
-                            [label "RECORD"]))
+                            [label record-label]
+                            [font normal-font]))
     ;; Video player servers:
 
     (define camera-vps (new video-player-server%
