@@ -12,9 +12,12 @@
     (define menu-bar (new menu-bar% [parent this]))
     (define config-menu (new menu% [parent menu-bar]
                              [label "Configure"]))
-    (new menu-item% [parent menu-bar]
+    (new menu-item% [parent config-menu]
          [label "Saved Files"]
          [callback (λ (t e) (void))])
+    (new menu-item% [parent config-menu]
+         [label "Exit"]
+         [callback (λ (t e) (send this show #f))])
     
     (define screen-row (new horizontal-pane% [parent this]))
     (define camera-screen (new video-canvas% [parent screen-row]
@@ -42,4 +45,20 @@
                              [label "MARK"]))
     (define rec-button (new button% [parent control-row]
                             [label "RECORD"]))
-  ))
+    ;; Video player servers:
+
+    (define camera-vps (new video-player-server%
+                            [video (color "black")]
+                            [canvas camera-screen]))
+    (define presenter-vps (new video-player-server%
+                               [video (color "black")]
+                               [canvas presenter-screen]))
+    (send camera-vps render-audio #f)
+    (send camera-vps play)
+    (send presenter-vps play)))
+
+(module+ main
+  (define window (new vid-gui%
+                      [label "VidOS"]))
+  (send window fullscreen #t)
+  (send window show #t))
