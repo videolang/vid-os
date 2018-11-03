@@ -3,6 +3,7 @@
 (require video/base
          video/render
          video/player
+         (prefix-in core: video/core)
          images/icons/control)
 
 (define screen-width 1920)
@@ -224,17 +225,15 @@
                                   (play-vps))))]))
     ;; Video player servers:
     (define camera-vps (new video-player-server%
-                            [video (color "black")]
+                            [video (blank)]
                             [canvas camera-screen]))
     (define presenter-vps (new video-player-server%
-                               [video (color "black")]
+                               [video (blank)]
                                [canvas presenter-screen]))
     (define mic-vps (new video-player-server%
                          [video (color "black")]))
     (send mic-vps render-video #f)
-    (send camera-vps play)
-    (send presenter-vps play)
-    (send mic-vps play)
+    (play-vps)
 
     (define/public (stop-vps)
       (send camera-vps stop)
@@ -242,8 +241,23 @@
       (send mic-vps stop))
 
     (define/public (play-vps)
+      (send camera-vps set-video
+            (if (file-exists? camera-dev)
+                (core:make-input-device #:video camera-dev
+                                        #:audio camera-dev)
+                (color "blue")))
       (send camera-vps play)
+      (send presenter-vps set-video
+            (if (file-exists? pres-dev)
+                (core:make-input-device #:video pres-dev
+                                        #:audio pres-dev)
+                (color "blue")))
       (send presenter-vps play)
+      (send mic-vps set-video
+            (if (file-exists? mic-dev)
+                (core:make-input-device #:video mic-dev
+                                        #:audio mic-dev)
+                (color "blue")))
       (send mic-vps play))
 
     (define recording-timer
