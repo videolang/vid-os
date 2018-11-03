@@ -1,6 +1,7 @@
 #lang racket/gui
 
 (require video/base
+         video/render
          video/player
          images/icons/control)
 
@@ -46,6 +47,10 @@
 (define vid-gui%
   (class frame%
     (super-new)
+
+    (define (stop-filming)
+      (send camera-vps stop)
+      (send presenter-vps stop))
     (define menu-bar (new menu-bar% [parent this]))
     (define config-menu (new menu% [parent menu-bar]
                              [label "Configure"]))
@@ -54,7 +59,17 @@
          [callback (λ (t e) (void))])
     (new menu-item% [parent config-menu]
          [label "Exit"]
-         [callback (λ (t e) (send this show #f))])
+         [callback
+          (λ (t e)
+            (stop-filming)
+            (send this show #f))])
+    (new menu-item% [parent config-menu]
+         [label "Shut Down"]
+         [callback
+          (λ (t e)
+            (stop-filming)
+            (send this show #f)
+            (system* (find-executable-path "halt")))])
     
     (define screen-row (new horizontal-pane% [parent this]))
     (define camera-screen (new video-canvas% [parent screen-row]
@@ -93,7 +108,16 @@
     (define presenter-vps (new video-player-server%
                                [video (color "black")]
                                [canvas presenter-screen]))
-    (send camera-vps render-audio #f)
+    (send camera-vps record (make-render-settings #:destination (format "camera-~a" (current-seconds))
+                                                  #:format 'mp4
+                                                  #:split-av #t
+                                                  #:width 1920
+                                                  #:height 1080))
+    (send presenter-vps record (make-render-settings #:destination (format "presenter-~a" (current-seconds))
+                                                     #:format 'mp4
+                                                     #:split-av #t
+                                                     #:width 1920
+                                                     #:height 1080))
     (send camera-vps play)
     (send presenter-vps play)))
 
