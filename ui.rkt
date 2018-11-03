@@ -8,6 +8,10 @@
 (define screen-width 1920)
 (define screen-height 1080)
 
+(define default-cam-in "/dev/video0")
+(define default-pres-in "/dev/video1")
+(define default-mic-in "/dev/audio")
+
 (define recordings-folder (build-path (find-system-path 'home-dir) "recordings"))
 (make-directory* recordings-folder)
 
@@ -75,10 +79,50 @@
   (stop-icon #:color "gray"
              #:height 200))
 
+(define config-dirs%
+  (class dialog%
+    (super-new)
+    (init camera presenter mic)
+    (define camera-dev camera)
+    (define pres-dev presenter)
+    (define mic-dev mic)
+    (define/public (get-dev)
+      (values camera-dev pres-dev mic-dev))
+    (define camera-field (new text-field% [parent this]
+                              [label "Camera"]
+                              [text camera-dev]))
+    (define pres-field (new text-field% [parent this]
+                            [label "Presenter"]
+                            [text pres-dev]))
+    (define mic-field (new text-field% [parent this]
+                           [label "Mic"]
+                           [text mic-dev]))
+    (define conf-row (new horizontal-pane% [parent this]))
+    (new button% [parent conf-row]
+         [label "OK"]
+         [callback
+          (λ (b e)
+            (set! camera-dev (send camera-field get-value))
+            (set! pres-dev (send pres-field get-value))
+            (set! mic-dev (send mic-field get-value))
+            (send this show #f))])
+    (new button% [parent conf-row]
+         [label "Cancel"]
+         [callback
+          (λ (b e)
+            (send this show #f))])))
+    
+    
+
 (define vid-gui%
   (class frame%
     (super-new)
     (define recording? #f)
+    (define recording-lock (make-semaphore 1))
+
+    (define camera-dev default-cam-in)
+    (define pres-dev default-pres-in)
+    (define mic-dev default-mic-in)
 
     (define (stop-filming)
       (send camera-vps stop)
@@ -86,6 +130,19 @@
     (define menu-bar (new menu-bar% [parent this]))
     (define config-menu (new menu% [parent menu-bar]
                              [label "Configure"]))
+    (new menu-item% [parent config-menu]
+         [label "Configure Inputs"]
+         [callback (λ (t e)
+                     (define conf (new config-dirs% [parent this]
+                                    [label "Configure"]
+                                    [camera camera-dev]
+                                    [presenter pres-dev]
+                                    [mic mic-dev]))
+                     (send conf show #t)
+                     (define-values (c p m) (send conf get-dev))
+                     (set! camera-dev c)
+                     (set! pres-dev p)
+                     (set! mic-dev m))])
     (new menu-item% [parent config-menu]
          [label "Saved Files"]
          [callback (λ (t e)
@@ -147,23 +204,24 @@
                             [font normal-font]
                             [callback
                              (λ (b e)
-                               (set! recording? (not recording?))
-                               (send camera-vps stop)
-                               (send presenter-vps stop)
-                               (send mic-vps stop)
-                               (cond [recording?
-                                      (send b set-label stop-label)
-                                      (send camera-vps record (camera-render-settings))
-                                      (send presenter-vps record (presenter-render-settings))
-                                      (send mic-vps record (mic-render-settings))]
-                                     [else
-                                      (send b set-label record-label)
-                                      (send camera-vps record #f)
-                                      (send presenter-vps record #f)
-                                      (send mic-vps record #f)])
-                               (send camera-vps play)
-                               (send presenter-vps play)
-                               (send mic-vps play))]))
+                               (call-with-semaphore/enable-break
+                                recording-lock
+                                (λ ()
+                                  (set! recording? (not recording?))
+                                  (stop-vps)
+                                  (cond [recording?
+                                         (send b set-label stop-label)
+                                         (send recording-timer start (* 1000 60 5) #f)
+                                         (send camera-vps record (camera-render-settings))
+                                         (send presenter-vps record (presenter-render-settings))
+                                         (send mic-vps record (mic-render-settings))]
+                                        [else
+                                         (send b set-label record-label)
+                                         (send recording-timer stop)
+                                         (send camera-vps record #f)
+                                         (send presenter-vps record #f)
+                                         (send mic-vps record #f)])
+                                  (play-vps))))]))
     ;; Video player servers:
     (define camera-vps (new video-player-server%
                             [video (color "black")]
@@ -176,7 +234,29 @@
     (send mic-vps render-video #f)
     (send camera-vps play)
     (send presenter-vps play)
-    (send mic-vps play)))
+    (send mic-vps play)
+
+    (define/public (stop-vps)
+      (send camera-vps stop)
+      (send presenter-vps stop)
+      (send mic-vps stop))
+
+    (define/public (play-vps)
+      (send camera-vps play)
+      (send presenter-vps play)
+      (send mic-vps play))
+
+    (define recording-timer
+      (new timer% [notify-callback
+                   (λ ()
+                     (call-with-semaphore/enable-break
+                      recording-lock
+                      (λ ()
+                        (stop-vps)
+                        (send camera-vps record (camera-render-settings))
+                        (send presenter-vps record (presenter-render-settings))
+                        (send mic-vps record (mic-render-settings))
+                        (play-vps))))]))))
 
 (module+ main
   (define window (new vid-gui%
