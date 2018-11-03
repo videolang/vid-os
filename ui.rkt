@@ -17,7 +17,7 @@
 (define normal-font
   (let ([n normal-control-font])
     (make-object font%
-      (* 4 (send n get-size))
+      (* 8 (send n get-size))
       (send n get-face)
       (send n get-family)
       (send n get-style)
@@ -41,7 +41,8 @@
       (send n get-hinting))))
 
 (define marks-file (build-path recordings-folder "marks.txt"))
-(define camera-render-settings
+
+(define (camera-render-settings)
   (make-render-settings #:destination (path->string (build-path recordings-folder
                                                                 (format "camera-~a"
                                                                         (current-seconds))))
@@ -50,9 +51,17 @@
                         #:width 1920
                         #:height 1080))
 
-(define presenter-render-settings
+(define (presenter-render-settings)
   (make-render-settings #:destination (path->string (build-path recordings-folder
                                                                 (format "presenter-~a"
+                                                                        (current-seconds))))
+                        #:format 'mp4
+                        #:split-av #t
+                        #:width 1920
+                        #:height 1080))
+(define (mic-render-settings)
+  (make-render-settings #:destination (path->string (build-path recordings-folder
+                                                                (format "mic-~a"
                                                                         (current-seconds))))
                         #:format 'mp4
                         #:split-av #t
@@ -61,14 +70,15 @@
 
 (define record-label
   (record-icon #:color "red"
-               #:height 50))
+               #:height 200))
 (define stop-label
   (stop-icon #:color "gray"
-             #:height 50))
+             #:height 200))
 
 (define vid-gui%
   (class frame%
     (super-new)
+    (define recording? #f)
 
     (define (stop-filming)
       (send camera-vps stop)
@@ -78,7 +88,9 @@
                              [label "Configure"]))
     (new menu-item% [parent config-menu]
          [label "Saved Files"]
-         [callback (λ (t e) (void))])
+         [callback (λ (t e)
+                     (system* (find-executable-path "xdg-open")
+                              recordings-folder))])
     (new menu-item% [parent config-menu]
          [label "Remove Marks"]
          [callback (λ (t e)
@@ -132,7 +144,26 @@
                                     (displayln (current-seconds)))))]))
     (define rec-button (new button% [parent control-row]
                             [label record-label]
-                            [font normal-font]))
+                            [font normal-font]
+                            [callback
+                             (λ (b e)
+                               (set! recording? (not recording?))
+                               (send camera-vps stop)
+                               (send presenter-vps stop)
+                               (send mic-vps stop)
+                               (cond [recording?
+                                      (send b set-label stop-label)
+                                      (send camera-vps record (camera-render-settings))
+                                      (send presenter-vps record (presenter-render-settings))
+                                      (send mic-vps record (mic-render-settings))]
+                                     [else
+                                      (send b set-label record-label)
+                                      (send camera-vps record #f)
+                                      (send presenter-vps record #f)
+                                      (send mic-vps record #f)])
+                               (send camera-vps play)
+                               (send presenter-vps play)
+                               (send mic-vps play))]))
     ;; Video player servers:
     (define camera-vps (new video-player-server%
                             [video (color "black")]
@@ -140,10 +171,12 @@
     (define presenter-vps (new video-player-server%
                                [video (color "black")]
                                [canvas presenter-screen]))
-    (send camera-vps record camera-render-settings)
-    (send presenter-vps record presenter-render-settings)
+    (define mic-vps (new video-player-server%
+                         [video (color "black")]))
+    (send mic-vps render-video #f)
     (send camera-vps play)
-    (send presenter-vps play)))
+    (send presenter-vps play)
+    (send mic-vps play)))
 
 (module+ main
   (define window (new vid-gui%
