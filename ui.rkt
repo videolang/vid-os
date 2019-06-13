@@ -9,9 +9,11 @@
 (define screen-width 1920)
 (define screen-height 1080)
 
-(define default-cam-in "/dev/video0")
-(define default-pres-in "/dev/video1")
-(define default-mic-in "/dev/audio")
+(define default-cam-vid "/dev/video0")
+(define default-cam-aud "CL1")
+(define default-pres-vid "/dev/video3")
+(define default-pres-aud "CL2")
+(define default-mic "")
 
 (define recordings-folder (build-path (find-system-path 'home-dir) "recordings"))
 (make-directory* recordings-folder)
@@ -83,18 +85,30 @@
 (define config-dirs%
   (class dialog%
     (super-new)
-    (init camera presenter mic)
-    (define camera-dev camera)
-    (define pres-dev presenter)
+    (init camera-vid camera-aud
+          presenter-vid presenter-aud
+          mic)
+    (define camera-vid-dev camera-vid)
+    (define camera-aud-dev camera-aud)
+    (define pres-vid-dev presenter-vid)
+    (define pres-aud-dev presenter-aud)
     (define mic-dev mic)
     (define/public (get-dev)
-      (values camera-dev pres-dev mic-dev))
-    (define camera-field (new text-field% [parent this]
-                              [label "Camera"]
-                              [text camera-dev]))
-    (define pres-field (new text-field% [parent this]
-                            [label "Presenter"]
-                            [text pres-dev]))
+      (values camera-vid-dev camera-aud-dev
+              pres-vid-dev pres-aud-dev
+              mic-dev))
+    (define camera-vid-field (new text-field% [parent this]
+                              [label "Camera Video"]
+                              [text camera-vid-dev]))
+    (define camera-aud-field (new text-field% [parent this]
+                                  [label "Camera Audio"]
+                                  [text camera-aud-dev]))
+    (define pres-vid-field (new text-field% [parent this]
+                                [label "Presenter Video"]
+                                [text pres-vid-dev]))
+    (define pres-aud-field (new text-field% [parent this]
+                                [label "Presenter Audio"]
+                                [text pres-aud-dev]))
     (define mic-field (new text-field% [parent this]
                            [label "Mic"]
                            [text mic-dev]))
@@ -103,8 +117,10 @@
          [label "OK"]
          [callback
           (λ (b e)
-            (set! camera-dev (send camera-field get-value))
-            (set! pres-dev (send pres-field get-value))
+            (set! camera-vid-dev (send camera-vid-field get-value))
+            (set! camera-aud-dev (send camera-aud-field get-value))
+            (set! pres-vid-dev (send pres-vid-field get-value))
+            (set! pres-aud-dev (send pres-aud-field get-value))
             (set! mic-dev (send mic-field get-value))
             (send this show #f))])
     (new button% [parent conf-row]
@@ -113,17 +129,17 @@
           (λ (b e)
             (send this show #f))])))
     
-    
-
 (define vid-gui%
   (class frame%
     (super-new)
     (define recording? #f)
     (define recording-lock (make-semaphore 1))
 
-    (define camera-dev default-cam-in)
-    (define pres-dev default-pres-in)
-    (define mic-dev default-mic-in)
+    (define camera-vid-dev default-cam-vid)
+    (define camera-aud-dev default-cam-aud)
+    (define pres-vid-dev default-pres-vid)
+    (define pres-aud-dev default-pres-aud)
+    (define mic-dev default-mic)
 
     (define (stop-filming)
       (send camera-vps stop)
@@ -136,13 +152,17 @@
          [callback (λ (t e)
                      (define conf (new config-dirs% [parent this]
                                     [label "Configure"]
-                                    [camera camera-dev]
-                                    [presenter pres-dev]
+                                    [camera-vid camera-vid-dev]
+                                    [camera-aud camera-aud-dev]
+                                    [presenter-vid pres-vid-dev]
+                                    [presenter-aud pres-aud-dev]
                                     [mic mic-dev]))
                      (send conf show #t)
-                     (define-values (c p m) (send conf get-dev))
-                     (set! camera-dev c)
-                     (set! pres-dev p)
+                     (define-values (cv ca pv pa m) (send conf get-dev))
+                     (set! camera-vid-dev cv)
+                     (set! camera-aud-dev ca)
+                     (set! pres-vid-dev pv)
+                     (set! camera-aud-dev pa)
                      (set! mic-dev m))])
     (new menu-item% [parent config-menu]
          [label "Saved Files"]
@@ -242,15 +262,15 @@
 
     (define/public (play-vps)
       (send camera-vps set-video
-            (if (file-exists? camera-dev)
-                (core:make-input-device #:video camera-dev
-                                        #:audio camera-dev)
+            (if (file-exists? camera-vid-dev)
+                (core:make-input-device #:video camera-vid-dev
+                                        #:audio camera-aud-dev)
                 (color "blue")))
       (send camera-vps play)
       (send presenter-vps set-video
-            (if (file-exists? pres-dev)
-                (core:make-input-device #:video pres-dev
-                                        #:audio pres-dev)
+            (if (file-exists? pres-vid-dev)
+                (core:make-input-device #:video pres-vid-dev
+                                        #:audio pres-aud-dev)
                 (color "blue")))
       (send presenter-vps play)
       (send mic-vps set-video
